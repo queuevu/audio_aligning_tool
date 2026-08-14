@@ -1,0 +1,26 @@
+cd /Users/viyola-mac/work/prayer/gemini/batch-api-use/aeneas_word_alignment_tool
+.venv/bin/python main.py
+
+
+
+.venv has everything needed (PySide6 + aeneas), and espeak/ffmpeg are already installed system-wide. To run it:
+
+Ran
+a command
+The GUI app launched successfully (that font-alias line is just a harmless Qt notice).
+
+To run it yourself from the project directory:
+
+cd /Users/viyola-mac/work/prayer/gemini/batch-api-use/aeneas_word_alignment_tool
+.venv/bin/python main.py
+That's it — this opens the desktop app window where you:
+
+Browse/drag-drop a .wav file
+Pick the language (English/Kannada/Tamil)
+Paste the transcript (blank line between parts/prayers)
+Choose an output .json path
+Click Generate Alignment
+A couple of notes:
+
+Use .venv, not .venv3.10 — that second one is missing PySide6 and won't run the GUI.
+If you ever want a permanent shortcut, you could alias the command above in your shell profile, but I'll leave that to you since it's your call whether to modify ~/.zshrc.

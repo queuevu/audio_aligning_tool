@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QGroupBox,
@@ -15,19 +16,24 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QSpinBox,
     QStatusBar,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from app.bible_batch_worker import BibleBatchWorker
+from app.bible_batch_worker import DEFAULT_MAX_WORKERS, BibleBatchWorker
 from app.constants import LANGUAGE_MAP
 from app.logger import QtLogHandler, configure_logging
 
 SETTINGS_TEXT_DIR = "paths/text_dir"
 SETTINGS_AUDIO_DIR = "paths/audio_dir"
 SETTINGS_LANGUAGE = "options/language"
+SETTINGS_PARALLEL = "options/parallel_chapters"
+SETTINGS_SKIP_EXISTING = "options/skip_existing"
+
+MAX_PARALLEL_CHAPTERS = 8
 
 GREEN_BUTTON_STYLE = """
 QPushButton {
@@ -69,6 +75,8 @@ class BibleMainWindow(QMainWindow):
         self.text_browse_button.clicked.connect(self.on_browse_text_clicked)
         self.audio_browse_button.clicked.connect(self.on_browse_audio_clicked)
         self.language_combo.currentIndexChanged.connect(self.on_language_changed)
+        self.parallel_spin.valueChanged.connect(self.on_parallel_changed)
+        self.skip_existing_check.toggled.connect(self.on_skip_existing_changed)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -100,7 +108,7 @@ class BibleMainWindow(QMainWindow):
 
         root_layout.addWidget(self._build_text_folder_group())
         root_layout.addWidget(self._build_audio_folder_group())
-        root_layout.addWidget(self._build_language_group())
+        root_layout.addWidget(self._build_options_group())
 
         self.generate_button = QPushButton("Generate All Chapters")
         self.generate_button.setStyleSheet(GREEN_BUTTON_STYLE)
@@ -119,7 +127,10 @@ class BibleMainWindow(QMainWindow):
         self.status_bar.showMessage("Ready.")
 
     def _build_text_folder_group(self) -> QGroupBox:
-        group = QGroupBox("Chapter Text Folder (book_name/Chapter1.txt, ...)")
+        group = QGroupBox(
+            "Text Folder - one book (Chapter1.txt, ...) or the whole Bible "
+            "(Genesis/Chapter1.txt, Exodus/Chapter1.txt, ...)"
+        )
         layout = QHBoxLayout(group)
 
         self.text_folder_edit = QLineEdit()
@@ -130,7 +141,10 @@ class BibleMainWindow(QMainWindow):
         return group
 
     def _build_audio_folder_group(self) -> QGroupBox:
-        group = QGroupBox("Chapter Audio Folder (book_name/Chapter1/*.wav, ...)")
+        group = QGroupBox(
+            "Audio Folder - matching layout (Chapter1/*.wav, ... or "
+            "Genesis/Genesis_Chapter_1/*.wav, ...)"
+        )
         layout = QHBoxLayout(group)
 
         self.audio_folder_edit = QLineEdit()
@@ -140,15 +154,39 @@ class BibleMainWindow(QMainWindow):
         layout.addWidget(self.audio_browse_button)
         return group
 
-    def _build_language_group(self) -> QGroupBox:
-        group = QGroupBox("Language")
+    def _build_options_group(self) -> QGroupBox:
+        group = QGroupBox("Options")
         layout = QHBoxLayout(group)
 
+        layout.addWidget(QLabel("Language:"))
         self.language_combo = QComboBox()
         for display_name, code in LANGUAGE_MAP.items():
             self.language_combo.addItem(display_name, userData=code)
-
         layout.addWidget(self.language_combo)
+
+        layout.addSpacing(24)
+
+        layout.addWidget(QLabel("Parallel chapters:"))
+        self.parallel_spin = QSpinBox()
+        self.parallel_spin.setRange(1, MAX_PARALLEL_CHAPTERS)
+        self.parallel_spin.setValue(DEFAULT_MAX_WORKERS)
+        self.parallel_spin.setToolTip(
+            "How many chapters to align at once. Each runs in its own "
+            "process, so this is limited by your CPU's core count - 3-4 is "
+            "a good starting point."
+        )
+        layout.addWidget(self.parallel_spin)
+
+        layout.addSpacing(24)
+
+        self.skip_existing_check = QCheckBox("Skip chapters already aligned")
+        self.skip_existing_check.setToolTip(
+            "If a chapter's .jsonl output already exists beside its audio "
+            "file, leave it alone instead of re-aligning it. Useful for "
+            "resuming a big batch after a partial run."
+        )
+        layout.addWidget(self.skip_existing_check)
+
         layout.addStretch(1)
         return group
 
@@ -183,6 +221,14 @@ class BibleMainWindow(QMainWindow):
         if index >= 0:
             self.language_combo.setCurrentIndex(index)
 
+        self.parallel_spin.setValue(
+            int(self.settings.value(SETTINGS_PARALLEL, DEFAULT_MAX_WORKERS))
+        )
+
+        self.skip_existing_check.setChecked(
+            self.settings.value(SETTINGS_SKIP_EXISTING, False, type=bool)
+        )
+
     # ------------------------------------------------------------------
     # Slots
     # ------------------------------------------------------------------
@@ -208,6 +254,12 @@ class BibleMainWindow(QMainWindow):
     def on_language_changed(self, _index: int) -> None:
         self.settings.setValue(SETTINGS_LANGUAGE, self.language_combo.currentText())
 
+    def on_parallel_changed(self, value: int) -> None:
+        self.settings.setValue(SETTINGS_PARALLEL, value)
+
+    def on_skip_existing_changed(self, checked: bool) -> None:
+        self.settings.setValue(SETTINGS_SKIP_EXISTING, checked)
+
     def on_generate_clicked(self) -> None:
         if self.worker is not None and self.worker.isRunning():
             return  # Already processing; ignore duplicate triggers.
@@ -229,6 +281,8 @@ class BibleMainWindow(QMainWindow):
             text_folder=Path(self.text_folder_edit.text().strip()),
             audio_folder=Path(self.audio_folder_edit.text().strip()),
             language_code=language_code,
+            max_workers=self.parallel_spin.value(),
+            skip_existing=self.skip_existing_check.isChecked(),
         )
         self.worker.chapter_progress.connect(self.on_chapter_progress)
         self.worker.finished_success.connect(self.on_batch_success)
@@ -288,6 +342,8 @@ class BibleMainWindow(QMainWindow):
             self.audio_folder_edit,
             self.audio_browse_button,
             self.language_combo,
+            self.parallel_spin,
+            self.skip_existing_check,
             self.generate_button,
         ]
 

@@ -1,26 +1,25 @@
-cd /Users/viyola-mac/work/prayer/gemini/batch-api-use/aeneas_word_alignment_tool
-.venv/bin/python main.py
+./run.sh
 
+That's it. On first run this creates .venv and installs everything
+(PySide6, aeneas, numpy) automatically — no manual venv setup needed,
+even on a fresh clone. Subsequent runs reuse the existing .venv.
 
+Requires espeak/espeak-ng and ffmpeg installed system-wide (macOS: brew
+install espeak-ng ffmpeg) and python3.10 available on PATH (aeneas needs
+3.10; brew install python@3.10 if missing).
 
-.venv has everything needed (PySide6 + aeneas), and espeak/ffmpeg are already installed system-wide. To run it:
-
-Ran
-a command
-The GUI app launched successfully (that font-alias line is just a harmless Qt notice).
-
-To run it yourself from the project directory:
-
-cd /Users/viyola-mac/work/prayer/gemini/batch-api-use/aeneas_word_alignment_tool
-.venv/bin/python main.py
-That's it — this opens the desktop app window where you:
+This opens the desktop app window where you:
 
 Browse/drag-drop a .wav file
 Pick the language (English/Kannada/Tamil)
 Paste the transcript (blank line between parts/prayers)
 Choose an output .json path
 Click Generate Alignment
-A couple of notes:
 
-Use .venv, not .venv3.10 — that second one is missing PySide6 and won't run the GUI.
-If you ever want a permanent shortcut, you could alias the command above in your shell profile, but I'll leave that to you since it's your call whether to modify ~/.zshrc.
+To run the Bible Batch Alignment Tool instead:
+
+./run.sh bible_main.py
+
+To re-run setup manually (e.g. after changing requirements.txt):
+
+./setup.sh
